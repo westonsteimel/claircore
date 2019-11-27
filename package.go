@@ -1,5 +1,11 @@
 package claircore
 
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+)
+
 type Package struct {
 	// unique ID of this package. this will be created as discovered by the library
 	// and used for persistence and hash map indexes
@@ -17,4 +23,17 @@ type Package struct {
 	PackageDB string `json:"package_db"`
 	// a hint on which repository this package was downloaded from
 	RepositoryHint string `json:"repository_hint"`
+}
+
+func (a Package) Value() (driver.Value, error) {
+	return json.Marshal(a)
+}
+
+func (a *Package) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+
+	return json.Unmarshal(b, &a)
 }

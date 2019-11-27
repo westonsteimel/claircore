@@ -1,5 +1,11 @@
 package claircore
 
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+)
+
 // Distribution is the accompanying system context of a package. this
 // information aides in CVE detection. scanners should identify this information before
 // starting their scan and tag each found package with as much as this discovered info as possible.
@@ -34,4 +40,17 @@ type Distribution struct {
 	// May or may not contain a release code name or OS version of some kind, as suitable. If not set, defaults to "PRETTY_NAME="Linux"".
 	// example: "PRETTY_NAME="Fedora 17 (Beefy Miracle)"".
 	PrettyName string `json:"pretty_name"`
+}
+
+func (a Distribution) Value() (driver.Value, error) {
+	return json.Marshal(a)
+}
+
+func (a *Distribution) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+
+	return json.Unmarshal(b, &a)
 }
