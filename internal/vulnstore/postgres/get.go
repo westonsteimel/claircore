@@ -7,16 +7,12 @@ import (
 
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/internal/vulnstore"
-	"github.com/quay/claircore/libvuln/driver"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 func get(ctx context.Context, pool *pgxpool.Pool, records []*claircore.IndexRecord, opts vulnstore.GetOpts) (map[int][]*claircore.Vulnerability, error) {
-	// build our query we will make into a prepared statement. see build func definition for details and context
-	query, dedupedMatchers, err := getBuilder(opts.Matchers)
-
 	// create a prepared statement
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -24,44 +20,18 @@ func get(ctx context.Context, pool *pgxpool.Pool, records []*claircore.IndexReco
 	}
 	defer tx.Rollback(ctx)
 
-	getStmt, err := tx.Prepare(ctx, "getStmt", query)
-	if err != nil {
-		return nil, err
-	}
-
 	// start a batch
 	batch := &pgx.Batch{}
 
 	// create our bind arguments. the order of dedupedMatchers
 	// dictates the order of our bindvar values.
 	for _, record := range records {
-		args := []interface{}{}
-		for _, m := range dedupedMatchers {
-			switch m {
-			case driver.PackageDistributionDID:
-				args = append(args, record.Distribution.DID)
-			case driver.PackageDistributionName:
-				args = append(args, record.Distribution.Name)
-			case driver.PackageDistributionVersion:
-				args = append(args, record.Distribution.Version)
-			case driver.PackageDistributionVersionCodeName:
-				args = append(args, record.Distribution.VersionCodeName)
-			case driver.PackageDistributionVersionID:
-				args = append(args, record.Distribution.VersionID)
-			case driver.PackageDistributionArch:
-				args = append(args, record.Distribution.Arch)
-			case driver.PackageDistributionCPE:
-				args = append(args, record.Distribution.CPE)
-			case driver.PackageDistributionPrettyName:
-				args = append(args, record.Distribution.PrettyName)
-			}
+		tagQuery, err := tagQueryBuilder(record, opts.Matchers)
+		if err != nil {
+			return nil, err
 		}
-		// fills the OR bind vars for (package_name = binary_package OR package_name = source_package)
-		args = append(args, record.Package.Source.Name)
-		args = append(args, record.Package.Name)
-
 		// queue the select query
-		batch.Queue(getStmt.Name, args...)
+		batch.Queue(tagQuery)
 	}
 	// send the batch
 	tctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

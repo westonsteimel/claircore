@@ -41,7 +41,8 @@ const (
                   repo_key,
                   repo_uri,
 				  fixed_in_version,
-				  tombstone)
+				  tombstone,
+				  tags)
 			VALUES ($1,
 					$2,
 					$3,
@@ -62,7 +63,8 @@ const (
 					$18,
 					$19,
 					$20,
-					$21)
+					$21,
+					$22)
 	ON conflict (updater,
 				 name,
 				 md5(description),
@@ -125,6 +127,24 @@ func putVulnerabilities(ctx context.Context, pool *pgxpool.Pool, updater string,
 		if vuln.Repo == nil {
 			vuln.Repo = &claircore.Repository{}
 		}
+
+		// compute tags
+		tags := []string{
+			vuln.Name,
+			vuln.Package.Name,
+			vuln.Dist.DID,
+			vuln.Dist.Name,
+			vuln.Dist.Version,
+			vuln.Dist.VersionCodeName,
+			vuln.Dist.VersionID,
+			vuln.Dist.Arch,
+			vuln.Dist.CPE,
+			vuln.Dist.PrettyName,
+			vuln.Repo.Name,
+			vuln.Repo.Key,
+			vuln.Repo.URI,
+		}
+
 		err := mBatcher.Queue(ctx,
 			insertVulnerability,
 			updater,
@@ -148,6 +168,7 @@ func putVulnerabilities(ctx context.Context, pool *pgxpool.Pool, updater string,
 			vuln.Repo.URI,
 			vuln.FixedInVersion,
 			newTombstone,
+			tags,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to queue vulnerability: %v", err)
